@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agent_eval_loop.models import ConversationEval, EvalCategory
+from agent_eval_loop.models import Conversation, ConversationEval, EvalCategory
 
 
 @dataclass
@@ -47,7 +47,9 @@ class Improvement:
 
 
 def check_regression(
+    baseline_conversations: list[Conversation],
     baseline_results: list[ConversationEval],
+    candidate_conversations: list[Conversation],
     candidate_results: list[ConversationEval],
     regression_tolerance: float = 0.05,
 ) -> RegressionResult:
@@ -56,27 +58,30 @@ def check_regression(
     A regression is defined as: a conversation that passed in baseline
     now fails in candidate, OR a score drop greater than regression_tolerance.
 
+    Conversations are matched across runs by (persona_id, scenario_id), not
+    by conversation_id — each simulation run produces fresh UUIDs, so keying
+    by ID would yield an empty intersection and the gate would never fire.
+
     Args:
+        baseline_conversations: Conversations that produced baseline_results
         baseline_results: Eval results from the current agent version
+        candidate_conversations: Conversations that produced candidate_results
         candidate_results: Eval results from the candidate version
         regression_tolerance: Maximum acceptable score drop per conversation
     """
-    # Index by conversation ID
-    baseline_index = {r.conversation_id: r for r in baseline_results}
-    candidate_index = {r.conversation_id: r for r in candidate_results}
+    baseline_index = _index_by_persona_scenario(baseline_conversations, baseline_results)
+    candidate_index = _index_by_persona_scenario(candidate_conversations, candidate_results)
 
     regressions = []
     improvements = []
     unchanged = 0
 
-    # Check each conversation that appears in both sets
-    common_ids = set(baseline_index) & set(candidate_index)
+    common_keys = set(baseline_index) & set(candidate_index)
 
-    for conv_id in common_ids:
-        base = baseline_index[conv_id]
-        cand = candidate_index[conv_id]
+    for key in common_keys:
+        base_conv_id, base = baseline_index[key]
+        cand_conv_id, cand = candidate_index[key]
 
-        # Compare per-category verdicts
         base_verdicts = {v.category: v for v in base.verdicts}
         cand_verdicts = {v.category: v for v in cand.verdicts}
 
@@ -91,27 +96,24 @@ def check_regression(
             score_delta = cv.score - bv.score
 
             if bv.passed and not cv.passed:
-                # Hard regression: was passing, now failing
                 regressions.append(Regression(
-                    conversation_id=conv_id,
+                    conversation_id=cand_conv_id,
                     category=category,
                     score_before=bv.score,
                     score_after=cv.score,
                 ))
                 conv_changed = True
             elif score_delta < -regression_tolerance:
-                # Soft regression: significant score drop
                 regressions.append(Regression(
-                    conversation_id=conv_id,
+                    conversation_id=cand_conv_id,
                     category=category,
                     score_before=bv.score,
                     score_after=cv.score,
                 ))
                 conv_changed = True
             elif not bv.passed and cv.passed:
-                # Improvement
                 improvements.append(Improvement(
-                    conversation_id=conv_id,
+                    conversation_id=cand_conv_id,
                     category=category,
                     score_before=bv.score,
                     score_after=cv.score,
@@ -138,3 +140,23 @@ def check_regression(
         unchanged=unchanged,
         summary="".join(summary_parts),
     )
+
+
+def _index_by_persona_scenario(
+    conversations: list[Conversation],
+    results: list[ConversationEval],
+) -> dict[tuple[str, str], tuple[str, ConversationEval]]:
+    """Index eval results by (persona_id, scenario_id) via conversation lookup.
+
+    Returns {(persona_id, scenario_id): (conversation_id, eval)}. If the same
+    (persona, scenario) pair appears more than once (e.g. repeated trials),
+    the last occurrence wins — callers that want repeats should pre-group.
+    """
+    conv_by_id = {c.id: c for c in conversations}
+    index: dict[tuple[str, str], tuple[str, ConversationEval]] = {}
+    for result in results:
+        conv = conv_by_id.get(result.conversation_id)
+        if conv is None:
+            continue
+        index[(conv.persona_id, conv.scenario_id)] = (result.conversation_id, result)
+    return index

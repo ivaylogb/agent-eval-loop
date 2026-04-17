@@ -23,6 +23,7 @@ from agent_eval_loop.improve.optimizer import Optimizer
 from agent_eval_loop.improve.regression import check_regression
 from agent_eval_loop.models import (
     AgentConfig,
+    Conversation,
     ConversationEval,
     EvalCategory,
     LoopIteration,
@@ -78,7 +79,10 @@ class ImprovementLoop:
             convergence_threshold=convergence_threshold,
         )
 
-        # Track previous eval results for regression testing
+        # Track previous conversations + eval results for regression testing.
+        # Both are needed: regression keying joins conversations → evals by
+        # (persona_id, scenario_id), not conversation_id (fresh UUIDs each run).
+        self._previous_conversations: list[Conversation] | None = None
         self._previous_eval_results: list[ConversationEval] | None = None
 
     def run(self) -> AgentConfig:
@@ -159,6 +163,7 @@ class ImprovementLoop:
         # --- CHECK CONVERGENCE ---
         if self._check_convergence(iteration):
             iteration.converged = True
+            self._previous_conversations = conversations
             self._previous_eval_results = eval_results
             return iteration
 
@@ -188,7 +193,11 @@ class ImprovementLoop:
                 )
 
                 # Run regression test if we have previous results
-                if self._previous_eval_results is not None:
+                have_baseline = (
+                    self._previous_eval_results is not None
+                    and self._previous_conversations is not None
+                )
+                if have_baseline:
                     console.print("  Running regression tests...")
                     # Re-evaluate the same conversations with the new config
                     # For efficiency, we re-use the conversations we already generated
@@ -204,7 +213,9 @@ class ImprovementLoop:
                     candidate_evals = self.scorer.evaluate_batch(candidate_conversations)
 
                     regression = check_regression(
+                        self._previous_conversations,
                         self._previous_eval_results,
+                        candidate_conversations,
                         candidate_evals,
                     )
                     console.print(f"  Regression: {regression.summary}")
@@ -220,6 +231,7 @@ class ImprovementLoop:
                     console.print("  [dim]No baseline for regression — applying improvement[/dim]")
                     self.current_config = candidate_config
 
+        self._previous_conversations = conversations
         self._previous_eval_results = eval_results
         return iteration
 
