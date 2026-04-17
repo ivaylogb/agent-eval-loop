@@ -53,12 +53,14 @@ class ConversationGenerator:
         agent_config: AgentConfig,
         tool_handlers: dict[str, Any] | None = None,
         simulator_model: str = "claude-sonnet-4-20250514",
+        client: anthropic.Anthropic | None = None,
     ):
         self.agent_config = agent_config
         self.tool_handlers = tool_handlers or {}
         self.simulator_model = simulator_model
-        # Shared client for persona LLM calls (agent has its own via runner)
-        self.client = anthropic.Anthropic()
+        # Prefer a caller-provided client so the whole loop (judges, optimizer,
+        # runner, generator) shares a single HTTP connection pool.
+        self.client = client or anthropic.Anthropic()
 
     def generate_batch(
         self,

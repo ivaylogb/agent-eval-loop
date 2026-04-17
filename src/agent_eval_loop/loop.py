@@ -138,6 +138,7 @@ class ImprovementLoop:
         generator = ConversationGenerator(
             agent_config=self.current_config,
             tool_handlers=self.tool_handlers,
+            client=self.client,
         )
         conversations = generator.generate_batch(
             scenarios=self.scenarios,
@@ -209,6 +210,7 @@ class ImprovementLoop:
                 candidate_generator = ConversationGenerator(
                     agent_config=candidate_config,
                     tool_handlers=self.tool_handlers,
+                    client=self.client,
                 )
                 candidate_conversations = candidate_generator.generate_batch(
                     pairs=baseline_pairs,
