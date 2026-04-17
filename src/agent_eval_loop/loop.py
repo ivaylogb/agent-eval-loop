@@ -238,7 +238,9 @@ class ImprovementLoop:
         """Check if the loop has converged.
 
         Converged means: we've run at least 2 iterations and the score
-        improvement is below the threshold.
+        gained a small positive amount — we're still improving, but only
+        marginally. A negative delta (score dropped) is never convergence;
+        keep iterating so the loop can either recover or hit max_iterations.
         """
         if len(self.state.iterations) < 1:
             # First iteration — can't check convergence yet
@@ -247,11 +249,10 @@ class ImprovementLoop:
         previous_score = self.state.iterations[-1].aggregate_score
         improvement = current.aggregate_score - previous_score
 
-        # Converged if improvement is below threshold (including negative)
-        if abs(improvement) < self.convergence_threshold:
+        if 0 <= improvement < self.convergence_threshold:
             console.print(
                 f"  [dim]Score delta ({improvement:+.4f}) within "
-                f"threshold (±{self.convergence_threshold})[/dim]"
+                f"threshold (+{self.convergence_threshold})[/dim]"
             )
             return True
 
