@@ -1,0 +1,19 @@
+name: "order_support_v1"
+description: "E-commerce order tracking and support agent"
+model: "claude-sonnet-4-20250514"
+max_tokens: 1024
+temperature: 0.0
+
+components:
+  instructions:
+    path: "components/instructions/v1.md"
+    version: "v1"
+  routines:
+    path: "components/routines/v1.md"
+    version: "v1"
+  tools:
+    path: "components/tools/v1.yaml"
+    version: "v1"
+  tools_usage:
+    path: "components/tools_usage/v1.md"
+    version: "v1"

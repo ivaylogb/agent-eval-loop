@@ -1,0 +1,180 @@
+# Tool Descriptions v1
+#
+# Best practice: treat tool descriptions as prompt components.
+# Each description should include:
+#   - What the tool does (natural language)
+#   - When to use it (preconditions)
+#   - When NOT to use it (scope restrictions — prevents misrouting)
+#   - Input schema with typed parameters
+#   - What the output looks like
+#   - Known error modes and how to handle them
+#
+# The "when NOT to use" section is critical. Without explicit scope
+# restrictions, models will call the most semantically similar tool
+# regardless of whether it's the right one for the situation.
+
+tools:
+  - name: lookup_order
+    description: >
+      Look up an order by order number. Returns order details including
+      items, status, dates, and payment summary.
+
+      WHEN TO USE: This should be your FIRST tool call in almost every
+      conversation. Call it as soon as you have an order number.
+
+      WHEN NOT TO USE: Do not call this tool to get tracking/shipping
+      details — use get_tracking_status for that. Do not call this tool
+      if the customer hasn't provided an order number yet — ask for it first.
+      Do not guess order numbers.
+    input_schema:
+      type: object
+      properties:
+        order_id:
+          type: string
+          description: "The order number (format: 'ORD-XXXXX', e.g., 'ORD-12345')"
+      required: ["order_id"]
+    output: >
+      Returns: order_id, items (list of product names), status (pending |
+      processing | shipped | delivered | cancelled), order_date, total
+      (dollar amount), payment_method_last4 (last 4 digits only — never
+      share more than this with the customer).
+    errors:
+      - code: "order_not_found"
+        description: "The order number doesn't exist in our system"
+        action: "Ask the customer to double-check their order number. Check their email for the confirmation."
+      - code: "invalid_format"
+        description: "The order number format is wrong (should be ORD-XXXXX)"
+        action: "Ask the customer for the correct format. It's in their confirmation email."
+
+  - name: get_tracking_status
+    description: >
+      Get real-time tracking and shipping status for an order.
+
+      WHEN TO USE: After confirming the order exists via lookup_order AND
+      the order status is 'shipped' or 'delivered'. This is the tool for
+      "where is my package?" questions.
+
+      WHEN NOT TO USE: Do not call for orders with status 'pending' or
+      'processing' — they haven't shipped yet. Do not use this tool to
+      check order details (items, price) — use lookup_order for that.
+      Do not use this for return shipments.
+    input_schema:
+      type: object
+      properties:
+        order_id:
+          type: string
+          description: "The order number"
+      required: ["order_id"]
+    output: >
+      Returns: carrier (FedEx, UPS, USPS), tracking_number, current_status
+      (in_transit | out_for_delivery | delivered | delayed | exception),
+      estimated_delivery (date), last_update (timestamp and location).
+    errors:
+      - code: "not_shipped"
+        description: "Order hasn't shipped yet"
+        action: "Tell the customer their order is still being processed and hasn't shipped yet."
+      - code: "tracking_unavailable"
+        description: "Carrier hasn't updated tracking information yet"
+        action: "Tell the customer tracking info isn't available yet — this is normal for the first 24 hours after shipping."
+        retryable: false
+
+  - name: initiate_return
+    description: >
+      Start a return process for an order. Generates a return shipping
+      label and return authorization number.
+
+      WHEN TO USE: Customer wants to return an item AND you've verified
+      via lookup_order that the order is within the 30-day return window
+      (check order_date vs today).
+
+      WHEN NOT TO USE: Do not call if the order is older than 30 days —
+      unless the customer reports a defect, in which case escalate to a
+      human agent instead. Do not use for exchanges (we don't support
+      direct exchanges — process a return + new order). Do not use for
+      cancellations — use cancel_order instead.
+    input_schema:
+      type: object
+      properties:
+        order_id:
+          type: string
+          description: "The order number to return"
+        reason:
+          type: string
+          description: "Customer's reason for return (e.g., 'wrong size', 'defective', 'changed mind')"
+      required: ["order_id", "reason"]
+    output: >
+      Returns: return_id (authorization number), return_label_url (link to
+      printable shipping label), refund_amount (dollar amount), refund_timeline
+      ("5-7 business days after we receive the item").
+    errors:
+      - code: "outside_window"
+        description: "Order is past the 30-day return window"
+        action: "If reason is 'defective', escalate to human agent. Otherwise, explain the return window policy."
+      - code: "non_returnable"
+        description: "Item category is non-returnable (e.g., gift cards, final sale)"
+        action: "Explain that this item category is non-returnable per our policy."
+
+  - name: cancel_order
+    description: >
+      Cancel an order that hasn't shipped yet. Immediately processes
+      a full refund.
+
+      WHEN TO USE: Customer wants to cancel AND lookup_order shows status
+      is 'pending' or 'processing'.
+
+      WHEN NOT TO USE: Do not call for orders with status 'shipped' or
+      'delivered' — offer a return via initiate_return instead. Do not
+      use for partial cancellations — we only support full order cancellation.
+    input_schema:
+      type: object
+      properties:
+        order_id:
+          type: string
+          description: "The order number to cancel"
+        reason:
+          type: string
+          description: "Customer's reason for cancellation"
+      required: ["order_id", "reason"]
+    output: >
+      Returns: cancellation_id, refund_amount (full order total),
+      refund_timeline ("3-5 business days").
+    errors:
+      - code: "already_shipped"
+        description: "Cannot cancel — order has already shipped"
+        action: "Explain it can't be cancelled since it shipped. Offer to initiate a return instead."
+      - code: "already_cancelled"
+        description: "Order was already cancelled previously"
+        action: "Confirm the order was already cancelled and provide the existing cancellation details."
+
+  - name: escalate_to_human
+    description: >
+      Transfer the conversation to a human agent. Always provide a
+      context summary so the human doesn't start from scratch.
+
+      WHEN TO USE:
+      - Customer explicitly requests a manager
+      - Issue involves a refund over $500
+      - Customer reports a product safety concern
+      - You've failed to resolve after 3 attempts
+      - Situation requires judgment you can't make (e.g., exception to policy)
+
+      WHEN NOT TO USE: Do not escalate for routine requests you can
+      handle (tracking, simple returns, cancellations). Do not escalate
+      just because the customer is frustrated — acknowledge their
+      frustration and try to solve the problem first.
+    input_schema:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: "Why this needs human attention (be specific)"
+        priority:
+          type: string
+          enum: ["normal", "high", "urgent"]
+          description: "normal = standard queue. high = frustrated customer or repeat contact. urgent = safety concern or potential legal issue."
+        context_summary:
+          type: string
+          description: "Brief summary for the human agent: what the customer needs, what you've tried, what data you've retrieved. The human should NOT have to re-ask the customer for information you've already gathered."
+      required: ["reason", "priority", "context_summary"]
+    output: >
+      Returns: transfer_id, estimated_wait_time (minutes), queue_position.
