@@ -123,8 +123,10 @@ def check_regression(
         if not conv_changed:
             unchanged += 1
 
-    # Regression test passes if there are zero regressions
-    passed = len(regressions) == 0
+    # Regression test passes only when (1) we actually compared something, and
+    # (2) nothing regressed. An empty intersection means we have no evidence
+    # the candidate is safe — fail closed rather than endorse a no-op sample.
+    passed = len(regressions) == 0 and len(common_keys) > 0
 
     summary_parts = [
         f"{'PASSED' if passed else 'FAILED'}: ",
@@ -132,6 +134,10 @@ def check_regression(
         f"{len(regressions)} regressions, ",
         f"{unchanged} unchanged",
     ]
+    if not common_keys:
+        summary_parts.append(
+            " (no baseline/candidate overlap — cannot verify safety)"
+        )
 
     return RegressionResult(
         passed=passed,
