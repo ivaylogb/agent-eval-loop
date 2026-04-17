@@ -62,24 +62,36 @@ class ConversationGenerator:
 
     def generate_batch(
         self,
-        scenarios: ScenarioSuite,
+        scenarios: ScenarioSuite | None = None,
         personas: list[Persona] | None = None,
         max_conversations: int | None = None,
+        pairs: list[tuple[Persona, Scenario]] | None = None,
     ) -> list[Conversation]:
-        """Generate conversations for all persona × scenario combinations."""
-        if personas is None:
-            personas = get_all_personas()
+        """Generate conversations for persona × scenario combinations.
 
-        pairs = [
-            (persona, scenario)
-            for persona in personas
-            for scenario in scenarios.scenarios
-        ]
+        Two call shapes:
+        1. Pass ``scenarios`` (and optionally ``personas`` / ``max_conversations``)
+           to cross-product and sample.
+        2. Pass an explicit ``pairs`` list to run exactly those pairs — used by
+           the improvement loop to re-run a candidate on the same pairs the
+           baseline was measured on, so scores are comparable.
+        """
+        if pairs is None:
+            if scenarios is None:
+                raise ValueError("Provide either scenarios or an explicit pairs list.")
+            if personas is None:
+                personas = get_all_personas()
 
-        if max_conversations and len(pairs) > max_conversations:
-            import random
+            pairs = [
+                (persona, scenario)
+                for persona in personas
+                for scenario in scenarios.scenarios
+            ]
 
-            pairs = random.sample(pairs, max_conversations)
+            if max_conversations and len(pairs) > max_conversations:
+                import random
+
+                pairs = random.sample(pairs, max_conversations)
 
         conversations = []
         with Progress(

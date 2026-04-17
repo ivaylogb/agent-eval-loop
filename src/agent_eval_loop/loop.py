@@ -23,7 +23,6 @@ from agent_eval_loop.improve.optimizer import Optimizer
 from agent_eval_loop.improve.regression import check_regression
 from agent_eval_loop.models import (
     AgentConfig,
-    Conversation,
     ConversationEval,
     EvalCategory,
     LoopIteration,
@@ -79,11 +78,6 @@ class ImprovementLoop:
             convergence_threshold=convergence_threshold,
         )
 
-        # Track previous conversations + eval results for regression testing.
-        # Both are needed: regression keying joins conversations → evals by
-        # (persona_id, scenario_id), not conversation_id (fresh UUIDs each run).
-        self._previous_conversations: list[Conversation] | None = None
-        self._previous_eval_results: list[ConversationEval] | None = None
 
     def run(self) -> AgentConfig:
         """Run the full improvement loop. Returns the best agent config."""
@@ -163,8 +157,6 @@ class ImprovementLoop:
         # --- CHECK CONVERGENCE ---
         if self._check_convergence(iteration):
             iteration.converged = True
-            self._previous_conversations = conversations
-            self._previous_eval_results = eval_results
             return iteration
 
         # --- IMPROVE ---
@@ -181,58 +173,56 @@ class ImprovementLoop:
             candidates = optimizer.propose_improvements(failure_patterns)
             iteration.candidates = candidates
 
-            # Try to apply the top candidate
             if candidates:
                 best_candidate = candidates[0]
                 console.print(f"  Proposed: {best_candidate.change_description}")
 
-                # Apply candidate — write new component to disk, get new config
                 candidate_config = optimizer.apply_candidate(
                     best_candidate,
                     output_dir=self.output_dir / f"iter{iteration_num}",
                 )
 
-                # Run regression test if we have previous results
-                have_baseline = (
-                    self._previous_eval_results is not None
-                    and self._previous_conversations is not None
+                # Regression test: re-run the candidate on the SAME
+                # (persona, scenario) pairs that just produced this
+                # iteration's eval_results. That makes the comparison
+                # apples-to-apples — current config vs candidate config
+                # on one fixed sample.
+                console.print("  Running regression tests...")
+                pairs_by_id = {
+                    (p.id, s.id): (p, s)
+                    for p in self.personas
+                    for s in self.scenarios.scenarios
+                }
+                baseline_pairs = [
+                    pairs_by_id[(c.persona_id, c.scenario_id)]
+                    for c in conversations
+                    if (c.persona_id, c.scenario_id) in pairs_by_id
+                ]
+
+                candidate_generator = ConversationGenerator(
+                    agent_config=candidate_config,
+                    tool_handlers=self.tool_handlers,
                 )
-                if have_baseline:
-                    console.print("  Running regression tests...")
-                    # Re-evaluate the same conversations with the new config
-                    # For efficiency, we re-use the conversations we already generated
-                    candidate_generator = ConversationGenerator(
-                        agent_config=candidate_config,
-                        tool_handlers=self.tool_handlers,
-                    )
-                    candidate_conversations = candidate_generator.generate_batch(
-                        scenarios=self.scenarios,
-                        personas=self.personas,
-                        max_conversations=min(self.max_conversations, 10),
-                    )
-                    candidate_evals = self.scorer.evaluate_batch(candidate_conversations)
+                candidate_conversations = candidate_generator.generate_batch(
+                    pairs=baseline_pairs,
+                )
+                candidate_evals = self.scorer.evaluate_batch(candidate_conversations)
 
-                    regression = check_regression(
-                        self._previous_conversations,
-                        self._previous_eval_results,
-                        candidate_conversations,
-                        candidate_evals,
-                    )
-                    console.print(f"  Regression: {regression.summary}")
+                regression = check_regression(
+                    conversations,
+                    eval_results,
+                    candidate_conversations,
+                    candidate_evals,
+                )
+                console.print(f"  Regression: {regression.summary}")
 
-                    if regression.passed:
-                        console.print("  [green]✓ No regressions — applying improvement[/green]")
-                        self.current_config = candidate_config
-                        best_candidate.regression_passed = True
-                    else:
-                        console.print("  [red]✗ Regressions detected — keeping current config[/red]")
-                else:
-                    # First iteration — no baseline to regress against, apply directly
-                    console.print("  [dim]No baseline for regression — applying improvement[/dim]")
+                if regression.passed:
+                    console.print("  [green]✓ No regressions — applying improvement[/green]")
                     self.current_config = candidate_config
+                    best_candidate.regression_passed = True
+                else:
+                    console.print("  [red]✗ Regressions detected — keeping current config[/red]")
 
-        self._previous_conversations = conversations
-        self._previous_eval_results = eval_results
         return iteration
 
     def _check_convergence(self, current: LoopIteration) -> bool:
