@@ -32,6 +32,11 @@ from agent_eval_loop.simulate.scenarios import Scenario, ScenarioSuite
 
 console = Console()
 
+# Literal token the persona LLM emits to end the conversation. We instruct the
+# persona to append this once its goal is resolved (or abandoned); the generator
+# strips it from the recorded message and breaks the turn loop.
+END_MARKER = "[END_CONVERSATION]"
+
 
 class ConversationGenerator:
     """Generate simulated multi-turn conversations.
@@ -139,7 +144,7 @@ class ConversationGenerator:
             Message(role=MessageRole.USER, content=current_user_message)
         )
 
-        for turn in range(scenario.max_turns):
+        for _turn in range(scenario.max_turns):
             # --- Agent turn (via runner — tools execute here) ---
             agent_msg = runner.send_message(current_user_message)
             agent_text = agent_msg.content
@@ -149,10 +154,6 @@ class ConversationGenerator:
 
             # Capture any tool calls that happened
             conversation.tool_calls.extend(runner.tool_calls[len(conversation.tool_calls):])
-
-            # --- Check if conversation should end ---
-            if self._should_end_conversation(agent_text, turn, scenario.max_turns):
-                break
 
             # --- Persona turn (separate LLM) ---
             persona_messages.append({
@@ -171,16 +172,16 @@ class ConversationGenerator:
             persona_text = self._extract_text(persona_response)
             persona_messages.append({"role": "assistant", "content": persona_text})
 
-            if self._persona_is_done(persona_text):
-                conversation.messages.append(
-                    Message(role=MessageRole.USER, content=persona_text)
-                )
-                break
+            done = END_MARKER in persona_text
+            clean_text = persona_text.replace(END_MARKER, "").strip()
 
-            current_user_message = persona_text
-            conversation.messages.append(
-                Message(role=MessageRole.USER, content=current_user_message)
-            )
+            if clean_text:
+                conversation.messages.append(
+                    Message(role=MessageRole.USER, content=clean_text)
+                )
+            if done:
+                break
+            current_user_message = clean_text or persona_text
 
         return conversation
 
@@ -191,36 +192,12 @@ class ConversationGenerator:
             f"Situation: {scenario.description}\n"
             f"Your goal: {persona.goal}\n"
             f"Start the conversation with this message: {scenario.opening_message}\n"
-            f"Then continue naturally based on the agent's responses."
+            f"Then continue naturally based on the agent's responses.\n\n"
+            f"When your goal is resolved — or you decide to give up — append "
+            f"the literal marker {END_MARKER} at the end of your final reply. "
+            f"Do NOT emit this marker on any earlier turn; the conversation "
+            f"only ends when you produce it."
         )
-
-    def _should_end_conversation(
-        self, agent_text: str, turn: int, max_turns: int
-    ) -> bool:
-        """Heuristic: should the conversation end after this agent turn?"""
-        if turn >= max_turns - 1:
-            return True
-
-        end_signals = [
-            "is there anything else i can help",
-            "glad i could help",
-            "have a great day",
-            "anything else i can assist",
-        ]
-        lower = agent_text.lower()
-        return any(signal in lower for signal in end_signals)
-
-    def _persona_is_done(self, persona_text: str) -> bool:
-        """Check if the persona signals the conversation is over."""
-        done_signals = [
-            "thank you, that's all",
-            "that resolves my issue",
-            "that's everything i needed",
-            "no, that's all",
-            "thanks, that's it",
-        ]
-        lower = persona_text.lower()
-        return any(signal in lower for signal in done_signals)
 
     @staticmethod
     def _extract_text(response: Any) -> str:
