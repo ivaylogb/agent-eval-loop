@@ -14,7 +14,6 @@ import anthropic
 from agent_eval_loop.agent.config import write_config_yaml
 from agent_eval_loop.models import (
     AgentConfig,
-    ComponentType,
     ComponentVersion,
     FailurePattern,
     ImprovementCandidate,

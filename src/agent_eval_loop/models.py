@@ -19,7 +19,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Agent components
 # ---------------------------------------------------------------------------
@@ -41,7 +40,8 @@ class ComponentType(str, Enum):
     ROUTINES = "routines"              # Step-by-step SOPs as agent-executable flows
     TOOLS = "tools"                    # Tool schemas, descriptions, usage guidance
     MACROS = "macros"                  # Pre-written templates for compliance-sensitive scenarios
-    TOOLS_USAGE = "tools_usage"        # Orchestration rules for tool calling (e.g., "call these 3 tools in parallel on turn 1")
+    # Orchestration rules for tool calling (e.g., "call these 3 tools in parallel on turn 1")
+    TOOLS_USAGE = "tools_usage"
 
 
 class ComponentVersion(BaseModel):

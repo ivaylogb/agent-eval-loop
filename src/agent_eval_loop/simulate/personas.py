@@ -77,18 +77,35 @@ class Persona(BaseModel):
 
     def _expertise_description(self) -> str:
         return {
-            ExpertiseLevel.NOVICE: "You are new to this product. You don't know the terminology and may describe things incorrectly.",
-            ExpertiseLevel.INTERMEDIATE: "You use this product regularly and know the basics, but may not know advanced features.",
-            ExpertiseLevel.EXPERT: "You are a power user. You know the product deeply and may reference specific features by name.",
+            ExpertiseLevel.NOVICE: (
+                "You are new to this product. You don't know the terminology"
+                " and may describe things incorrectly."
+            ),
+            ExpertiseLevel.INTERMEDIATE: (
+                "You use this product regularly and know the basics, but may"
+                " not know advanced features."
+            ),
+            ExpertiseLevel.EXPERT: (
+                "You are a power user. You know the product deeply and may"
+                " reference specific features by name."
+            ),
         }[self.expertise]
 
     def _style_description(self) -> str:
         return {
             CommunicationStyle.CONCISE: "Keep messages short. One or two sentences max.",
             CommunicationStyle.VERBOSE: "Provide lots of detail and context in your messages.",
-            CommunicationStyle.CONFUSED: "You're not sure what you need. Your messages may be unclear or contradictory.",
-            CommunicationStyle.AGGRESSIVE: "You're frustrated and want this resolved immediately. You may be curt or demanding.",
-            CommunicationStyle.POLITE: "You're patient and courteous, even if things aren't going well.",
+            CommunicationStyle.CONFUSED: (
+                "You're not sure what you need. Your messages may be unclear"
+                " or contradictory."
+            ),
+            CommunicationStyle.AGGRESSIVE: (
+                "You're frustrated and want this resolved immediately. You may"
+                " be curt or demanding."
+            ),
+            CommunicationStyle.POLITE: (
+                "You're patient and courteous, even if things aren't going well."
+            ),
         }[self.style]
 
 

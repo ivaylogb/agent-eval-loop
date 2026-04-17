@@ -68,6 +68,7 @@ class ScenarioSuite(BaseModel):
 def load_scenarios(path: str) -> ScenarioSuite:
     """Load scenarios from a YAML file."""
     from pathlib import Path
+
     import yaml
 
     with open(Path(path)) as f:

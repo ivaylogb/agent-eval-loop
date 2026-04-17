@@ -116,7 +116,9 @@ class FailureAnalyzer:
         }
 
         key = (category, component)
-        return suggestions.get(key, f"Review the {component.value if component else 'agent'} component for issues related to {category.value}.")
+        comp_label = component.value if component else "agent"
+        default = f"Review the {comp_label} component for issues related to {category.value}."
+        return suggestions.get(key, default)
 
     def print_report(self, patterns: list[FailurePattern]) -> None:
         """Print a formatted failure analysis report."""

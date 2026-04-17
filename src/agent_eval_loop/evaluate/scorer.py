@@ -9,14 +9,23 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from agent_eval_loop.evaluate.judges import Judge
 from agent_eval_loop.models import (
     Conversation,
     ConversationEval,
     EvalCategory,
 )
-from agent_eval_loop.evaluate.judges import Judge
 
 console = Console()
+
+
+def _score_color(score: float) -> str:
+    """Pick a rich color for a mean/aggregate score."""
+    if score >= 0.7:
+        return "green"
+    if score >= 0.5:
+        return "yellow"
+    return "red"
 
 
 class CategorySummary(BaseModel):
@@ -124,7 +133,7 @@ class Scorer:
         table.add_column("Evaluated", justify="right")
 
         for cat, cat_summary in summary.category_summaries.items():
-            color = "green" if cat_summary.mean_score >= 0.7 else "yellow" if cat_summary.mean_score >= 0.5 else "red"
+            color = _score_color(cat_summary.mean_score)
             table.add_row(
                 cat.value,
                 f"[{color}]{cat_summary.mean_score:.2f}[/{color}]",
@@ -133,7 +142,7 @@ class Scorer:
             )
 
         table.add_section()
-        color = "green" if summary.overall_mean_score >= 0.7 else "yellow" if summary.overall_mean_score >= 0.5 else "red"
+        color = _score_color(summary.overall_mean_score)
         table.add_row(
             "[bold]Overall[/bold]",
             f"[bold {color}]{summary.overall_mean_score:.2f}[/bold {color}]",

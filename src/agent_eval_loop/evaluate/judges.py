@@ -111,10 +111,14 @@ Evaluation criteria:
 Think step-by-step through each criterion, then produce your assessment.
 
 Respond with a JSON object containing these fields IN THIS ORDER:
-- "reasoning": string (2-3 sentences explaining your assessment — write this FIRST, before deciding the score)
-- "evidence": list of strings (specific quotes from the conversation that support your reasoning)
-- "failure_component": string or null (one of "instructions", "routines", "tools", "macros", "tools_usage", or null if no issue identified)
-- "score": float between 0.0 and 1.0 (granular quality score — decide this LAST, after reasoning)
+- "reasoning": string (2-3 sentences explaining your assessment — write this
+  FIRST, before deciding the score)
+- "evidence": list of strings (specific quotes from the conversation that
+  support your reasoning)
+- "failure_component": string or null (one of "instructions", "routines",
+  "tools", "macros", "tools_usage", or null if no issue identified)
+- "score": float between 0.0 and 1.0 (granular quality score — decide this
+  LAST, after reasoning)
 
 Important: formulate your reasoning and evidence before committing to a score.
 Be strict but fair. Respond ONLY with the JSON object."""

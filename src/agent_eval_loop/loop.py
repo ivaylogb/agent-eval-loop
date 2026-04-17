@@ -93,17 +93,22 @@ class ImprovementLoop:
         ))
 
         for i in range(self.max_iterations):
-            console.print(f"\n[bold cyan]═══ Iteration {i + 1}/{self.max_iterations} ═══[/bold cyan]")
+            header = f"═══ Iteration {i + 1}/{self.max_iterations} ═══"
+            console.print(f"\n[bold cyan]{header}[/bold cyan]")
 
             iteration = self._run_iteration(i + 1)
             self.state.iterations.append(iteration)
 
             if iteration.converged:
-                console.print(f"\n[bold green]✓ Converged after {i + 1} iterations[/bold green]")
+                console.print(
+                    f"\n[bold green]✓ Converged after {i + 1} iterations[/bold green]"
+                )
                 break
 
             if i < self.max_iterations - 1:
-                console.print(f"[yellow]Score: {iteration.aggregate_score:.3f} — continuing...[/yellow]")
+                console.print(
+                    f"[yellow]Score: {iteration.aggregate_score:.3f} — continuing...[/yellow]"
+                )
 
         self._save_state()
         self.state.current_best_config = self.current_config.name
@@ -168,7 +173,10 @@ class ImprovementLoop:
             return iteration
 
         # --- IMPROVE ---
-        console.print("\n[bold yellow]3. IMPROVE[/bold yellow] — Analyzing failures and proposing fixes...")
+        console.print(
+            "\n[bold yellow]3. IMPROVE[/bold yellow] —"
+            " Analyzing failures and proposing fixes..."
+        )
         failure_patterns = self.analyzer.analyze(eval_results)
         iteration.failure_patterns = failure_patterns
         self.analyzer.print_report(failure_patterns)
@@ -285,7 +293,9 @@ def main():
     parser.add_argument("--scenarios", required=True, help="Path to scenarios YAML")
     parser.add_argument("--output", default="outputs", help="Output directory")
     parser.add_argument("--iterations", type=int, default=3, help="Max iterations")
-    parser.add_argument("--conversations", type=int, default=20, help="Max conversations per iteration")
+    parser.add_argument(
+        "--conversations", type=int, default=20, help="Max conversations per iteration"
+    )
     parser.add_argument("--threshold", type=float, default=0.02, help="Convergence threshold")
 
     args = parser.parse_args()
