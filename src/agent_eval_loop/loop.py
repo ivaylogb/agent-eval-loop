@@ -15,7 +15,7 @@ import jsonlines
 from rich.console import Console
 from rich.panel import Panel
 
-from agent_eval_loop.agent.config import load_config
+from agent_eval_loop.agent.config import load_config, write_config_yaml
 from agent_eval_loop.evaluate.judges import get_standard_judges
 from agent_eval_loop.evaluate.scorer import Scorer
 from agent_eval_loop.improve.analyzer import FailureAnalyzer
@@ -108,11 +108,18 @@ class ImprovementLoop:
         self._save_state()
         self.state.current_best_config = self.current_config.name
 
+        # Persist the winning config as a standalone, reloadable manifest.
+        best_manifest = write_config_yaml(
+            self.current_config,
+            self.output_dir / "best_config.yaml",
+        )
+
         console.print(Panel(
             f"[bold green]Loop complete[/bold green]\n"
             f"Best config: {self.current_config.name}\n"
             f"Final score: {self.state.iterations[-1].aggregate_score:.3f}\n"
-            f"Iterations run: {len(self.state.iterations)}",
+            f"Iterations run: {len(self.state.iterations)}\n"
+            f"Manifest: {best_manifest}",
             title="Results",
             border_style="green",
         ))

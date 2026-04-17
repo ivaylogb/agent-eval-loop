@@ -50,12 +50,15 @@ def load_config(config_path: str | Path) -> AgentConfig:
             comp_path = comp_def["path"]
             version = comp_def.get("version", Path(comp_path).stem)
 
-        full_path = base_dir / comp_path
+        full_path = (base_dir / comp_path).resolve()
         content = _load_component_content(full_path)
 
+        # Store the resolved absolute path so downstream writers (optimizer,
+        # loop checkpoint) can reference the original component from any
+        # working directory without losing track of the source file.
         components[comp_type] = ComponentVersion(
             component_type=comp_type,
-            path=comp_path,
+            path=str(full_path),
             version=version,
             content=content,
         )
@@ -149,6 +152,44 @@ def _load_component_content(path: Path) -> str:
         return json.dumps(data, indent=2)
     else:
         return path.read_text()
+
+
+def write_config_yaml(config: AgentConfig, path: str | Path) -> Path:
+    """Serialize an AgentConfig to a YAML manifest that ``load_config`` can read.
+
+    The newly-written component (if any) is emitted with a path relative to
+    the manifest's directory when it already lives under that directory;
+    unchanged components retain their absolute paths so the manifest stays
+    self-contained regardless of where it's written.
+    """
+    path = Path(path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    components_out: dict[str, dict[str, str]] = {}
+    for comp_type, comp in config.components.items():
+        comp_path = Path(comp.path)
+        try:
+            rel = comp_path.resolve().relative_to(path.parent)
+            serialized_path = str(rel)
+        except ValueError:
+            serialized_path = str(comp_path)
+        components_out[comp_type.value] = {
+            "path": serialized_path,
+            "version": comp.version,
+        }
+
+    doc = {
+        "name": config.name,
+        "description": config.description,
+        "model": config.model,
+        "max_tokens": config.max_tokens,
+        "temperature": config.temperature,
+        "components": components_out,
+    }
+
+    with open(path, "w") as f:
+        yaml.safe_dump(doc, f, sort_keys=False)
+    return path
 
 
 def build_system_prompt(config: AgentConfig) -> str:

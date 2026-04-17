@@ -11,7 +11,7 @@ from pathlib import Path
 
 import anthropic
 
-from agent_eval_loop.agent.config import load_config
+from agent_eval_loop.agent.config import write_config_yaml
 from agent_eval_loop.models import (
     AgentConfig,
     ComponentType,
@@ -146,14 +146,21 @@ Return ONLY the revised component text, nothing else."""
             content=candidate.proposed_content,
         )
 
-        return AgentConfig(
+        new_config = AgentConfig(
             name=f"{self.agent_config.name}_{candidate.proposed_version}",
             description=f"Candidate: {candidate.change_description}",
             components=new_components,
             model=self.agent_config.model,
             max_tokens=self.agent_config.max_tokens,
             temperature=self.agent_config.temperature,
+            tool_schemas=self.agent_config.tool_schemas,
         )
+
+        # Persist a manifest so the candidate can be reloaded via load_config —
+        # by the next iteration, by human review, or from the CLI after a run.
+        write_config_yaml(new_config, output_dir / f"{new_config.name}.yaml")
+
+        return new_config
 
 
 def _increment_version(version: str) -> str:

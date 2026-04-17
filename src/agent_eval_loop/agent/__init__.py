@@ -1,6 +1,7 @@
 from agent_eval_loop.agent.config import (
     build_system_prompt,
     load_config,
+    write_config_yaml,
     yaml_tools_to_api_schemas,
 )
 from agent_eval_loop.agent.runner import AgentRunner
@@ -11,5 +12,6 @@ __all__ = [
     "Scratchpad",
     "build_system_prompt",
     "load_config",
+    "write_config_yaml",
     "yaml_tools_to_api_schemas",
 ]
