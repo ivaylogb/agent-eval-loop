@@ -165,8 +165,23 @@ Be strict but fair. Respond ONLY with the JSON object."""
                 failure_component=None,
             )
 
-        score = float(data.get("score", 0.0))
-        score = max(0.0, min(1.0, score))  # clamp
+        raw_score = data.get("score", 0.0)
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError):
+            # Judge returned a non-numeric score (e.g. "high", None). Fail
+            # closed: score 0 and surface the malformed value in reasoning.
+            return JudgeVerdict(
+                category=self.rubric.category,
+                passed=False,
+                score=0.0,
+                reasoning=(
+                    f"Judge returned non-numeric score {raw_score!r}. "
+                    f"Original reasoning: {data.get('reasoning', '')}"
+                ),
+                failure_component=None,
+            )
+        score = max(0.0, min(1.0, score))
 
         # Apply threshold — the rubric determines pass/fail, not the LLM
         passed = score >= self.rubric.pass_threshold
