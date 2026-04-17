@@ -62,6 +62,10 @@ class AgentConfig(BaseModel):
     model: str = "claude-sonnet-4-20250514"
     max_tokens: int = 1024
     temperature: float = 0.0
+    # Tool schemas parsed from the `tools` component YAML into Anthropic API
+    # format. The tools component also stays in the system prompt as prose
+    # (keeps "when NOT to use" guidance); this field is what goes on the wire.
+    tool_schemas: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

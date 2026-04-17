@@ -62,8 +62,9 @@ class AgentRunner:
         if scratchpad_content:
             system += f"\n\n<scratchpad>\n{scratchpad_content}\n</scratchpad>"
 
-        # Build tool definitions for the API
-        tools = self._build_tool_definitions() if self.tool_handlers else None
+        # Build tool definitions for the API. Config-provided schemas take
+        # precedence: they're the source of truth, handlers only execute.
+        tools = self._build_tool_definitions() or None
 
         # Build API kwargs (omit tools if None to avoid API errors)
         api_kwargs: dict[str, Any] = {
@@ -183,21 +184,39 @@ class AgentRunner:
         ]
 
     def _build_tool_definitions(self) -> list[dict]:
-        """Build tool definitions from registered handlers."""
-        tools = []
+        """Build tool definitions for the API.
+
+        Precedence:
+        1. Schemas parsed from the agent's ``tools`` YAML component.
+        2. ``tool_schema``/``input_schema`` attributes on registered handlers
+           (for tools declared in Python, not YAML).
+        If neither source supplies a schema for a given handler, it's omitted —
+        advertising a tool without a schema produces opaque API errors.
+        """
+        tools: list[dict] = []
+        seen: set[str] = set()
+
+        for schema in self.config.tool_schemas:
+            name = schema.get("name")
+            if name and name not in seen:
+                tools.append(schema)
+                seen.add(name)
+
         for name, handler in self.tool_handlers.items():
+            if name in seen:
+                continue
             schema = getattr(handler, "tool_schema", None)
             if schema:
                 tools.append(schema)
-            else:
+                seen.add(name)
+            elif hasattr(handler, "input_schema"):
                 tools.append({
                     "name": name,
                     "description": handler.__doc__ or f"Tool: {name}",
-                    "input_schema": getattr(handler, "input_schema", {
-                        "type": "object",
-                        "properties": {},
-                    }),
+                    "input_schema": handler.input_schema,
                 })
+                seen.add(name)
+
         return tools
 
     def get_text_response(self) -> str:

@@ -17,6 +17,7 @@ tool descriptions provide schemas, and macros supply compliance templates.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -36,6 +37,8 @@ def load_config(config_path: str | Path) -> AgentConfig:
         raw = yaml.safe_load(f)
 
     components: dict[ComponentType, ComponentVersion] = {}
+
+    tool_schemas: list[dict[str, Any]] = []
 
     for comp_key, comp_def in raw.get("components", {}).items():
         comp_type = ComponentType(comp_key)
@@ -57,6 +60,14 @@ def load_config(config_path: str | Path) -> AgentConfig:
             content=content,
         )
 
+        # When the tools component is a YAML schema file, also parse it into
+        # API tool definitions. Markdown/text tool components are assumed to
+        # be narrative-only and contribute no API-level schemas.
+        if comp_type is ComponentType.TOOLS and full_path.suffix.lower() in (".yaml", ".yml"):
+            with open(full_path) as f:
+                tools_raw = yaml.safe_load(f)
+            tool_schemas = yaml_tools_to_api_schemas(tools_raw)
+
     return AgentConfig(
         name=raw.get("name", config_path.stem),
         description=raw.get("description", ""),
@@ -64,7 +75,57 @@ def load_config(config_path: str | Path) -> AgentConfig:
         model=raw.get("model", "claude-sonnet-4-20250514"),
         max_tokens=raw.get("max_tokens", 1024),
         temperature=raw.get("temperature", 0.0),
+        tool_schemas=tool_schemas,
     )
+
+
+def yaml_tools_to_api_schemas(data: Any) -> list[dict[str, Any]]:
+    """Convert a parsed tools YAML into Anthropic API tool definitions.
+
+    Expects the shape used by the customer_support example:
+        tools:
+          - name: lookup_order
+            description: "..."
+            input_schema: {...}
+            output: "..."           # optional; folded into description
+            errors: [...]           # optional; folded into description
+
+    Narrative fields (``output``, ``errors``) are appended to ``description``
+    so the API-level tool carries the full guidance the system prompt prose
+    also contains. Only ``name``, ``description``, and ``input_schema`` survive
+    on the wire — those are what the API accepts.
+    """
+    if not isinstance(data, dict):
+        return []
+    tools = data.get("tools") or []
+    schemas: list[dict[str, Any]] = []
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        name = tool.get("name")
+        if not name:
+            continue
+        description = (tool.get("description") or "").strip()
+        output = tool.get("output")
+        if output:
+            description = f"{description}\n\nOutput: {str(output).strip()}"
+        errors = tool.get("errors")
+        if errors:
+            lines = []
+            for err in errors:
+                if isinstance(err, dict):
+                    code = err.get("code", "")
+                    desc = err.get("description", "")
+                    action = err.get("action", "")
+                    lines.append(f"- {code}: {desc} — {action}")
+            if lines:
+                description = description + "\n\nErrors:\n" + "\n".join(lines)
+        schemas.append({
+            "name": name,
+            "description": description,
+            "input_schema": tool.get("input_schema") or {"type": "object", "properties": {}},
+        })
+    return schemas
 
 
 def _load_component_content(path: Path) -> str:
