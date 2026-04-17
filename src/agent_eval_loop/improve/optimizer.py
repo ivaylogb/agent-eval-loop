@@ -124,10 +124,17 @@ Return ONLY the revised component text, nothing else."""
         output_dir = Path(output_dir)
         comp_type = candidate.component
 
-        # Write new component file
+        # Preserve the original component's extension — a YAML tools component
+        # written out as .md would be re-loaded as plain text on the next
+        # iteration, silently losing structure.
+        original = self.agent_config.components.get(comp_type)
+        suffix = Path(original.path).suffix if original and original.path else ".md"
+        if not suffix:
+            suffix = ".md"
+
         comp_dir = output_dir / comp_type.value
         comp_dir.mkdir(parents=True, exist_ok=True)
-        new_path = comp_dir / f"{candidate.proposed_version}.md"
+        new_path = comp_dir / f"{candidate.proposed_version}{suffix}"
         new_path.write_text(candidate.proposed_content)
 
         # Build new config with updated component
