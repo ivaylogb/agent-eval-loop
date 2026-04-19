@@ -147,7 +147,20 @@ class AgentRunner:
         return " ".join(b.text for b in text_blocks)
 
     def _execute_tool(self, tool_name: str, arguments: dict) -> Any:
-        """Execute a tool and record the call."""
+        """Execute a tool and record the call.
+
+        Error envelope shape is intentionally aligned with
+        ``agent_tool_kit.ToolError.to_response()``:
+
+            {"error": {"category": str, "message": str, "retryable": bool,
+                       "suggested_action": str (optional),
+                       "details": dict (optional)}}
+
+        so a downstream judge or router can pattern-match on
+        ``result["error"]["category"]`` without caring whether the handler
+        was a raw function or a toolkit ``Tool``. The short ``error`` string
+        stored on ``ToolCall.error`` is kept as a human-readable summary.
+        """
         start = time.time()
         error = None
         result = None
@@ -156,12 +169,27 @@ class AgentRunner:
             handler = self.tool_handlers.get(tool_name)
             if handler is None:
                 error = f"Unknown tool: {tool_name}"
-                result = {"error": error}
+                result = {
+                    "error": {
+                        "category": "not_found",
+                        "message": error,
+                        "retryable": False,
+                    }
+                }
             else:
                 result = handler(**arguments)
         except Exception as e:
             error = str(e)
-            result = {"error": error, "error_type": type(e).__name__}
+            result = {
+                "error": {
+                    "category": "internal",
+                    "message": error,
+                    "retryable": False,
+                    "suggested_action": (
+                        "An unexpected error occurred. Try again or escalate."
+                    ),
+                }
+            }
 
         latency = (time.time() - start) * 1000
 
