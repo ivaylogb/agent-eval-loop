@@ -220,16 +220,26 @@ class AgentRunner:
            (for tools declared in Python, not YAML).
         If neither source supplies a schema for a given handler, it's omitted —
         advertising a tool without a schema produces opaque API errors.
+
+        SILENT PRECEDENCE TRAP: if both sources define the same tool name,
+        the config version wins and the handler's ``tool_schema`` is dropped
+        without a warning. This matters for ``agent-tool-kit`` tools, whose
+        handler-side schema often carries richer ``description`` /
+        ``when_not_to_use`` text than the YAML config. To use the handler's
+        schema, remove that tool's entry from the YAML ``tools`` component.
         """
         tools: list[dict] = []
         seen: set[str] = set()
 
+        # 1. Config schemas first — and once a name is in ``seen`` the
+        #    handler's ``tool_schema`` for the same name cannot override it.
         for schema in self.config.tool_schemas:
             name = schema.get("name")
             if name and name not in seen:
                 tools.append(schema)
                 seen.add(name)
 
+        # 2. Handler-provided schemas only fill gaps the config didn't cover.
         for name, handler in self.tool_handlers.items():
             if name in seen:
                 continue

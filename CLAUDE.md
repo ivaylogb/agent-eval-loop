@@ -22,6 +22,7 @@ A framework for systematically improving AI agents through a simulate → evalua
 - **ImprovementCandidate stores proposed_content.** Revised text lives in the model, not lost between steps.
 - **Shared Anthropic client.** One HTTP connection across judges, generator, optimizer.
 - **5 component types.** Instructions, Routines, Tools, Tools_Usage (orchestration rules), Macros (compliance templates).
+- **Schema precedence: config wins silently.** In `AgentRunner._build_tool_definitions`, tool schemas parsed from the YAML `tools` component are consumed first. A handler's `tool_schema` attribute only fills in gaps for names the config didn't cover. If you're using `agent-tool-kit` tools with richer `description`/`when_not_to_use` text than what's in the YAML config, remove the corresponding entry from the `tools` component (or drop the component entirely) — otherwise the handler's schema is ignored without warning. See the inline comment in `agent/runner.py` for the exact decision point.
 
 ## Best practices encoded in the codebase
 - **Investigate first, answer second** — example instructions enforce data retrieval before any text response
