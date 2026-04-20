@@ -155,13 +155,6 @@ Key principles covered:
 - **Fat tools over prompt orchestration** — wrap multi-step workflows in deterministic code
 - **Regression testing gates every change** — never deploy without verifying zero regressions
 
-## Inspired By
-
-- [Anthropic's agent building patterns](https://docs.anthropic.com/en/docs/build-with-claude/agent-patterns)
-- [Lance Martin's context engineering framework](https://rlancemartin.github.io/2025/06/23/context_engineering/)
-- [DSPy](https://dspy.ai/) for programmatic prompt optimization
-- [Braintrust](https://www.braintrust.dev/) for eval infrastructure
-
 ## License
 
 MIT
