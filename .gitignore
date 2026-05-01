@@ -15,3 +15,5 @@ loop_state.json
 .pytest_cache/
 audit_reports/
 audit_reports/
+audit_reports/
+.venv-audit/
