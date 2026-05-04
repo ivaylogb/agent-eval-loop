@@ -8,6 +8,18 @@ Most teams build agents and then manually tweak prompts when things break. This 
 
 This repo implements a disciplined alternative: a **simulate → evaluate → improve** loop that treats agent quality as an engineering problem, not a vibes problem.
 
+## Where this fits
+
+Part of [agent-engineering](https://github.com/ivaylogb/agent-engineering) — a four-layer system for production-grade LLM agents.
+
+This kit is **Layer 1: Evaluation**. It answers: how do we know the agent got better?
+
+The other three layers:
+
+- [agent-tool-kit](https://github.com/ivaylogb/agent-tool-kit) — tool contracts. How do we make agent actions reliable?
+- [agent-context-kit](https://github.com/ivaylogb/agent-context-kit) — context runtime. How do we keep the model focused?
+- [agent-skill-kit](https://github.com/ivaylogb/agent-skill-kit) — development workflows. How do we make agent-building repeatable?
+
 ## How It Works
 
 ```
